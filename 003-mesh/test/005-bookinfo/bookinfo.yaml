@@ -1,0 +1,418 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: discovery
+    version: v1
+  name: samples-discovery-server-v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: discovery
+      version: v1
+  template:
+    metadata:
+      annotations:
+        flomesh.io/inject: "true"
+      labels:
+        app: discovery
+        service: samples-discovery-server
+        sys: bookinfo-samples
+        version: v1
+    spec:
+      containers:
+      - env:
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_HOSTNAME
+          value: samples-discovery-server
+        - name: K8S_SERVICE_NAME
+          value: samples-discovery-server
+        image: docker.io/flomesh/samples-discovery-server:latest
+        imagePullPolicy: Always
+        name: app
+        ports:
+        - containerPort: 8761
+        resources:
+          limits:
+            memory: 300Mi
+          requests:
+            memory: 300Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: config
+    version: v1
+  name: samples-config-service-v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: config
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: config
+        service: samples-config-service
+        version: v1
+    spec:
+      containers:
+      - env:
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_HOSTNAME
+          value: samples-discovery-server
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_PORT
+          value: "8771"
+        - name: K8S_SAMPLES_BOOKINFO_RATINGS_HOSTNAME
+          value: samples-bookinfo-ratings
+        - name: K8S_SERVICE_NAME
+          value: samples-config-service
+        image: docker.io/flomesh/samples-config-service:latest
+        imagePullPolicy: Always
+        name: app
+        ports:
+        - containerPort: 8888
+        resources:
+          limits:
+            memory: 300Mi
+          requests:
+            memory: 300Mi
+      initContainers:
+      - args:
+        - |-
+          until nc -vz samples-discovery-server 8761; \
+            do echo "Waiting for Eureka ready ..."; \
+            sleep 5; \
+          done;
+        command:
+        - /bin/sh
+        - -c
+        image: busybox:latest
+        name: check-discovery
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gateway
+    version: v1
+  name: samples-api-gateway-v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+      version: v1
+  template:
+    metadata:
+      annotations:
+        flomesh.io/inject: "true"
+      labels:
+        app: gateway
+        service: samples-api-gateway
+        sys: bookinfo-samples
+        version: v1
+    spec:
+      containers:
+      - env:
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_HOSTNAME
+          value: samples-discovery-server
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_PORT
+          value: "8771"
+        - name: K8S_SERVICE_NAME
+          value: samples-api-gateway
+        image: docker.io/flomesh/samples-api-gateway:latest
+        imagePullPolicy: Always
+        name: app
+        ports:
+        - containerPort: 10000
+        resources:
+          limits:
+            memory: 300Mi
+          requests:
+            memory: 300Mi
+      initContainers:
+      - args:
+        - |-
+          until nc -vz samples-config-service 8888; \
+            do echo "Waiting for config service ready ..."; \
+            sleep 5; \
+          done;
+        command:
+        - /bin/sh
+        - -c
+        image: busybox:latest
+        name: check-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: details
+    version: v1
+  name: samples-bookinfo-details-v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: details
+      version: v1
+  template:
+    metadata:
+      annotations:
+        flomesh.io/inject: "true"
+      labels:
+        app: details
+        service: samples-bookinfo-details
+        sys: bookinfo-samples
+        version: v1
+    spec:
+      containers:
+      - env:
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_HOSTNAME
+          value: samples-discovery-server
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_PORT
+          value: "8771"
+        - name: K8S_SERVICE_NAME
+          value: samples-bookinfo-details
+        image: docker.io/flomesh/samples-bookinfo-details:latest
+        imagePullPolicy: Always
+        name: app
+        ports:
+        - containerPort: 8103
+        resources:
+          limits:
+            memory: 300Mi
+          requests:
+            memory: 300Mi
+      initContainers:
+      - args:
+        - |-
+          until nc -vz samples-config-service 8888; \
+            do echo "Waiting for config service ready ..."; \
+            sleep 5; \
+          done;
+        command:
+        - /bin/sh
+        - -c
+        image: busybox:latest
+        name: check-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ratings
+    version: v1
+  name: samples-bookinfo-ratings-v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ratings
+      version: v1
+  template:
+    metadata:
+      annotations:
+        flomesh.io/inject: "true"
+      labels:
+        app: ratings
+        service: samples-bookinfo-ratings
+        sys: bookinfo-samples
+        version: v1
+    spec:
+      containers:
+      - env:
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_HOSTNAME
+          value: samples-discovery-server
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_PORT
+          value: "8771"
+        - name: K8S_SERVICE_NAME
+          value: samples-bookinfo-ratings
+        image: docker.io/flomesh/samples-bookinfo-ratings:latest
+        imagePullPolicy: Always
+        name: app
+        ports:
+        - containerPort: 8101
+        resources:
+          limits:
+            memory: 600Mi
+          requests:
+            memory: 600Mi
+      initContainers:
+      - args:
+        - |-
+          until nc -vz samples-config-service 8888; \
+            do echo "Waiting for config service ready ..."; \
+            sleep 5; \
+          done;
+        command:
+        - /bin/sh
+        - -c
+        image: busybox:latest
+        name: check-config
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: reviews
+    version: v1
+  name: samples-bookinfo-reviews-v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reviews
+      version: v1
+  template:
+    metadata:
+      annotations:
+        flomesh.io/inject: "true"
+      labels:
+        app: reviews
+        service: samples-bookinfo-reviews
+        sys: bookinfo-samples
+        version: v1
+    spec:
+      containers:
+      - env:
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_HOSTNAME
+          value: samples-discovery-server
+        - name: K8S_SAMPLES_DISCOVERY_SERVER_PORT
+          value: "8771"
+        - name: K8S_SAMPLES_BOOKINFO_RATINGS_HOSTNAME
+          value: samples-bookinfo-ratings
+        - name: K8S_SAMPLES_BOOKINFO_RATINGS_PORT
+          value: "8111"
+        - name: K8S_SERVICE_NAME
+          value: samples-bookinfo-reviews
+        image: docker.io/flomesh/samples-bookinfo-reviews:latest
+        imagePullPolicy: Always
+        name: app
+        ports:
+        - containerPort: 8102
+        resources:
+          limits:
+            memory: 600Mi
+          requests:
+            memory: 600Mi
+      initContainers:
+      - args:
+        - |-
+          until nc -vz samples-config-service 8888; \
+            do echo "Waiting for config service ready ..."; \
+            sleep 5; \
+          done;
+        command:
+        - /bin/sh
+        - -c
+        image: busybox:latest
+        name: check-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: discovery
+    service: samples-discovery-server
+  name: samples-discovery-server
+spec:
+  ports:
+  - name: http
+    port: 8761
+    targetPort: 8761
+  - name: sidecar
+    port: 8771
+    targetPort: 8771
+  selector:
+    app: discovery
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: config
+    service: samples-config-service
+  name: samples-config-service
+spec:
+  ports:
+  - name: http
+    port: 8888
+    targetPort: 8888
+  selector:
+    app: config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: gateway
+    service: samples-api-gateway
+  name: samples-api-gateway
+spec:
+  ports:
+  - name: http
+    port: 10000
+    targetPort: 10000
+  - name: sidecar
+    port: 10010
+    targetPort: 10010
+  selector:
+    app: gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: details
+    service: samples-bookinfo-details
+  name: samples-bookinfo-details
+spec:
+  ports:
+  - name: http
+    port: 8103
+    targetPort: 8103
+  - name: sidecar
+    port: 8113
+    targetPort: 8113
+  selector:
+    app: details
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: ratings
+    service: samples-bookinfo-ratings
+  name: samples-bookinfo-ratings
+spec:
+  ports:
+  - name: http
+    port: 8101
+    targetPort: 8101
+  - name: sidecar
+    port: 8111
+    targetPort: 8111
+  selector:
+    app: ratings
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: reviews
+    service: samples-bookinfo-reviews
+  name: samples-bookinfo-reviews
+spec:
+  ports:
+  - name: http
+    port: 8102
+    targetPort: 8102
+  - name: sidecar
+    port: 8112
+    targetPort: 8112
+  selector:
+    app: reviews
+---
